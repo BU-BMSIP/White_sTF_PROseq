@@ -1,0 +1,20 @@
+name: proseq
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - fastqc
+  - multiqc
+  - cutadapt
+  - trim-galore
+  - bowtie2
+  - star
+  - samtools
+  - bedtools
+  - deeptools
+  - pybigwig
+  - pandas
+  - numpy
+  - matplotlib
