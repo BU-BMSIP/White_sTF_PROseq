@@ -18,6 +18,7 @@ include { BOWTIE2_INDEX } from './modules/bowtie2_index/main.nf'
 include { BOWTIE2_ALIGN } from './modules/bowtie2_align/main.nf'
 include { SAMTOOLS_SORT_INDEX } from './modules/samtools_sort_index/main.nf'
 include { FLAGSTAT } from './modules/flagstat/main.nf'
+include { BAMCOVERAGE } from './modules/bamcoverage/main.nf'
 
 
 
@@ -84,6 +85,10 @@ workflow {
         .set { sorted_bams_for_flagstat }
 
     flagstat_output = FLAGSTAT(sorted_bams_for_flagstat)
+
+    // 8) Bam Coverage 
+    // Assuming you have: tuple(sample_id, sorted_bam, sorted_bai)
+    bigwig_files = BAMCOVERAGE(sorted_bams)
 
 
 }
