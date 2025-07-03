@@ -11,14 +11,17 @@ params.skip_index  = params.skip_index ?: false   // flag to reuse existing .bt2
 // ------------------------------------------------------------
 // Module imports
 // ------------------------------------------------------------
-include { FASTQC }        from './modules/fastqc/main.nf'
-include { FASTP }         from './modules/fastp/main.nf'
-include { MULTIQC }       from './modules/multiqc/main.nf'
-include { BOWTIE2_INDEX } from './modules/bowtie2_index/main.nf'
-include { BOWTIE2_ALIGN } from './modules/bowtie2_align/main.nf'
+include { FASTQC }              from './modules/fastqc/main.nf'
+include { FASTP }               from './modules/fastp/main.nf'
+include { MULTIQC }             from './modules/multiqc/main.nf'
+include { BOWTIE2_INDEX }       from './modules/bowtie2_index/main.nf'
+include { BOWTIE2_ALIGN }       from './modules/bowtie2_align/main.nf'
+include { BOWTIE2_ALIGN as BOWTIE2_ALIGN_DM6 } from './modules/bowtie2_align/main.nf'
 include { SAMTOOLS_SORT_INDEX } from './modules/samtools_sort_index/main.nf'
-include { FLAGSTAT } from './modules/flagstat/main.nf'
-include { BAMCOVERAGE } from './modules/bamcoverage/main.nf'
+include { FLAGSTAT }            from './modules/flagstat/main.nf'
+include { FLAGSTAT  as FLAGSTAT_DM6 } from './modules/flagstat/main.nf'   // ← NEW
+include { BAMCOVERAGE }         from './modules/bamcoverage/main.nf'
+include { BIGWIG_CORRELATION}   from './modules/bigwig_correlation/main.nf'
 
 
 
@@ -73,6 +76,30 @@ workflow {
     def align_input   = trimmed_reads.combine(index_base)  // (sample_id, fastq, index_base)
     def aligned_bams  = BOWTIE2_ALIGN( index_files, align_input )
 
+    //------------------------------------------------------------------
+// 6b)  dm6 spike-in alignment  (exact percentages)
+//------------------------------------------------------------------
+/* Channels holding the index shards and basename */
+Channel
+    .fromPath("${params.dm6_index}*.bt2")
+    .set { dm6_idx_files }          //   path list
+Channel
+    .value(params.dm6_index)
+    .set { dm6_idx_base }           //   single basename string
+
+/* Combine each trimmed read with the dm6 basename */
+def dm6_input = trimmed_reads.combine(dm6_idx_base)   // (sample_id, fq, basename)
+
+/* Re-use existing modules */
+def dm6_bams = BOWTIE2_ALIGN_DM6( dm6_idx_files, dm6_input )
+
+/* Map to (sample_id, bam) and run flagstat */
+dm6_bams
+    .map { id, bam -> tuple(id, bam) }
+    .set { dm6_flagstat_in }
+
+dm6_stats = FLAGSTAT_DM6(dm6_flagstat_in)                 // emits .txt per sample
+
     // 6) Wrap your aligned BAMs:
     aligned_bams.map { sample_id, bam -> tuple(sample_id, bam) } \
         .set { unsorted_bams }
@@ -90,5 +117,13 @@ workflow {
     // Assuming you have: tuple(sample_id, sorted_bam, sorted_bai)
     bigwig_files = BAMCOVERAGE(sorted_bams)
 
+    
+    // 9) Bigwig Correlation of RNA across samples
+   bigwig_files
+    .collect()
+    .set { all_bigwigs }
 
+
+BIGWIG_CORRELATION(all_bigwigs, file('/projectnb/khalil/nwhite42/ProSEQ_project/refs/genes.bed'))
+    
 }
