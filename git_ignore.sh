@@ -1,3 +1,5 @@
+# Create comprehensive .gitignore
+cat > .gitignore << 'EOF'
 # Nextflow cache and logs
 .nextflow/
 .nextflow.log
@@ -35,3 +37,4 @@ Thumbs.db
 
 # Spike-in intermediate files (these are large)
 spike_in_counts/
+EOF

@@ -1,0 +1,11 @@
+pausing_index	0.5194
+promoter_density	5.8416
+promoter_total	590
+gene_body_density	5.3437
+gene_body_total	2752
+pre_TES_density	5.2185
+pre_TES_total	788
+post_TES_density	5.1921
+post_TES_total	784
+downstream_density	4.5499
+downstream_total	1597

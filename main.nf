@@ -1,129 +1,148 @@
 #!/usr/bin/env nextflow
-nextflow.enable.dsl=2
+nextflow.enable.dsl = 2
 
-// ------------------------------------------------------------
-// Parameter definitions
-// ------------------------------------------------------------
-params.samplesheet = "${params.samplesheet ?: 'samples.csv'}"
-params.outdir      = "${params.outdir ?: 'results'}"
-params.skip_index  = params.skip_index ?: false   // flag to reuse existing .bt2 files
 
-// ------------------------------------------------------------
-// Module imports
-// ------------------------------------------------------------
-include { FASTQC }              from './modules/fastqc/main.nf'
-include { FASTP }               from './modules/fastp/main.nf'
-include { MULTIQC }             from './modules/multiqc/main.nf'
-include { BOWTIE2_INDEX }       from './modules/bowtie2_index/main.nf'
-include { BOWTIE2_ALIGN }       from './modules/bowtie2_align/main.nf'
+/* ─────────────────────────  PARAMETERS  ───────────────────────── */
+params.samplesheet   = params.samplesheet ?: 'samples.csv'
+params.outdir        = params.outdir      ?: 'results'
+params.skip_index    = params.skip_index  ?: false
+
+// dm6 spike-in
+params.dm6_index     = params.dm6_index   ?: 'refs/dm6/dm6'   // basename *without* .bt2
+
+// PRO-seq-specific
+params.adapter_r1    = params.adapter_r1  ?: 'TGGAATTCTCGG'
+params.min_len       = params.min_len     ?: 26
+params.qual_cutoff   = params.qual_cutoff ?: 10
+params.umi_pattern   = params.umi_pattern ?: 'NNNNNN'
+params.skip_dedup    = params.skip_dedup  ?: false
+params.bin_size      = params.bin_size    ?: 10
+params.tss_bed       = params.tss_bed     ?: 'refs/plasmid_tss.bed'
+
+
+/* ─────────────────────────  MODULE IMPORTS  ───────────────────── */
+include { FASTQC }                 from './modules/fastqc/main.nf'
+include { MULTIQC }                from './modules/multiqc/main.nf'
+
+include { CUTADAPT_TRIM }          from './modules/cutadapt_trim/main.nf'
+include { UMI_EXTRACT }            from './modules/umi_extract/main.nf'
+include { UMI_DEDUP }              from './modules/umi_dedup/main.nf'
+
+include { BOWTIE2_INDEX }          from './modules/bowtie2_index/main.nf'
+include { BOWTIE2_ALIGN }          from './modules/bowtie2_align/main.nf'
 include { BOWTIE2_ALIGN as BOWTIE2_ALIGN_DM6 } from './modules/bowtie2_align/main.nf'
-include { SAMTOOLS_SORT_INDEX } from './modules/samtools_sort_index/main.nf'
-include { FLAGSTAT }            from './modules/flagstat/main.nf'
-include { FLAGSTAT  as FLAGSTAT_DM6 } from './modules/flagstat/main.nf'   // ← NEW
-include { BAMCOVERAGE }         from './modules/bamcoverage/main.nf'
-include { BIGWIG_CORRELATION}   from './modules/bigwig_correlation/main.nf'
+
+include { SAMTOOLS_SORT_INDEX }    from './modules/samtools_sort_index/main.nf'
+include { FLAGSTAT }               from './modules/flagstat/main.nf'
+include { FLAGSTAT as FLAGSTAT_DM6 }from './modules/flagstat/main.nf'
+
+include { BAM2BED }                from './modules/bam2bed/main.nf'
+include { PROSEQ_METRICS }         from './modules/proseq_metrics/main.nf'
+
+include { BAMCOVERAGE }            from './modules/bamcoverage/main.nf'
+include { BIGWIG_CORRELATION }     from './modules/bigwig_correlation/main.nf'
 
 
 
-// ------------------------------------------------------------
-// Workflow definition
-// ------------------------------------------------------------
+/* ───────────────────────────  WORKFLOW  ───────────────────────── */
 workflow {
 
-    //------------------------------------------------------------------
-    // 1) Ingest sample sheet -> Channel of (sample_id, fastq_path)
-    //------------------------------------------------------------------
+    /* 1 ─ Sample sheet  (sample_id , fastq path) */
     Channel
-        .fromPath(params.samplesheet)
+        .fromPath( params.samplesheet )
         .splitCsv(header:true)
-        .map   { row -> tuple( row.name, file(row.path) ) }
+        .map   { row -> tuple(row.name, file(row.path)) }
         .set   { fastq_ch }
 
-    //------------------------------------------------------------------
-    // 2) Raw-read QC
-    //------------------------------------------------------------------
-    def fastqc_out  = FASTQC( fastq_ch )
-    def fastqc_zips = fastqc_out.zip.collect()
 
-    MULTIQC( fastqc_zips )
+    /* 2 ─ FastQC + MultiQC (run #1) */
+    fastqc_out  = FASTQC( fastq_ch )
 
-    //------------------------------------------------------------------
-    // 3) Read trimming
-    //------------------------------------------------------------------
-    def fastp_out     = FASTP( fastq_ch )
-    def trimmed_reads = fastp_out.trimmed  // (sample_id, trimmed_fastq)
+    fastqc_zip_list = fastqc_out.zip          // property is already a Channel
+                         .collect()           // → single List[path]
+    MULTIQC( fastqc_zip_list )
 
-    //------------------------------------------------------------------
-    // 4) Build (or reuse) Bowtie2 index
-    //------------------------------------------------------------------
-    def index_base
+
+    /* 3 ─ Adapter trimming */
+    trimmed_reads = CUTADAPT_TRIM( fastq_ch )         // (sample, trimmed.fq.gz)
+
+
+    /* 4 ─ UMI extraction */
+    umi_reads = UMI_EXTRACT( trimmed_reads )          // (sample, umi.fq.gz)
+
+
+    /* 5 ─ Bowtie2 index (build or reuse) */
     def index_files
-
+    def index_base
     if( params.skip_index ) {
-        log.info "↪︎  Skipping index build – using pre‑existing merged_reference.*.bt2 files"
-        index_base  = Channel.value('refs/merged_reference')
         index_files = Channel.fromPath('refs/merged_reference*.bt2')
+        index_base  = Channel.value      ('refs/merged_reference')
     }
     else {
-        def bowtie_idx  = BOWTIE2_INDEX( file('refs/merged_reference.fa') )
-        index_files = bowtie_idx.index_files
-        index_base  = bowtie_idx.index_base
+        built       = BOWTIE2_INDEX( file('refs/merged_reference.fa') )
+        index_files = built.index_files
+        index_base  = built.index_base                      // value channel
     }
 
-    //------------------------------------------------------------------
-    // 5) Alignment
-    //------------------------------------------------------------------
-    def align_input   = trimmed_reads.combine(index_base)  // (sample_id, fastq, index_base)
-    def aligned_bams  = BOWTIE2_ALIGN( index_files, align_input )
 
-    //------------------------------------------------------------------
-// 6b)  dm6 spike-in alignment  (exact percentages)
-//------------------------------------------------------------------
-/* Channels holding the index shards and basename */
-Channel
-    .fromPath("${params.dm6_index}*.bt2")
-    .set { dm6_idx_files }          //   path list
-Channel
-    .value(params.dm6_index)
-    .set { dm6_idx_base }           //   single basename string
-
-/* Combine each trimmed read with the dm6 basename */
-def dm6_input = trimmed_reads.combine(dm6_idx_base)   // (sample_id, fq, basename)
-
-/* Re-use existing modules */
-def dm6_bams = BOWTIE2_ALIGN_DM6( dm6_idx_files, dm6_input )
-
-/* Map to (sample_id, bam) and run flagstat */
-dm6_bams
-    .map { id, bam -> tuple(id, bam) }
-    .set { dm6_flagstat_in }
-
-dm6_stats = FLAGSTAT_DM6(dm6_flagstat_in)                 // emits .txt per sample
-
-    // 6) Wrap your aligned BAMs:
-    aligned_bams.map { sample_id, bam -> tuple(sample_id, bam) } \
-        .set { unsorted_bams }
-
-    sorted_bams = SAMTOOLS_SORT_INDEX(unsorted_bams)
-
-    // 7) Get stats on sorted BAMs:
-    // Only pass (sample_id, sorted.bam) to FLAGSTAT
-    sorted_bams.map { sample_id, bam, bai -> tuple(sample_id, bam) } \
-        .set { sorted_bams_for_flagstat }
-
-    flagstat_output = FLAGSTAT(sorted_bams_for_flagstat)
-
-    // 8) Bam Coverage 
-    // Assuming you have: tuple(sample_id, sorted_bam, sorted_bai)
-    bigwig_files = BAMCOVERAGE(sorted_bams)
-
-    
-    // 9) Bigwig Correlation of RNA across samples
-   bigwig_files
-    .collect()
-    .set { all_bigwigs }
+    /* 6 ─ Alignment to merged reference
+            ‣ module expects:
+              - channel 1: *.bt2 shards
+              - channel 2: (sample, fq , basename)
+    */
+    align_input = umi_reads.combine(index_base)          // add basename
+    aligned_bams = BOWTIE2_ALIGN( index_files, align_input )
 
 
-BIGWIG_CORRELATION(all_bigwigs, file('/projectnb/khalil/nwhite42/ProSEQ_project/refs/genes.bed'))
-    
+    /* 6b ─ Alignment to dm6 spike-in */
+    dm6_idx_files = Channel.fromPath("${params.dm6_index}*.bt2")
+    dm6_idx_base  = Channel.value( params.dm6_index )
+    dm6_input     = umi_reads.combine( dm6_idx_base )
+
+    dm6_bams  = BOWTIE2_ALIGN_DM6( dm6_idx_files, dm6_input )
+    FLAGSTAT_DM6( dm6_bams.map { id,bam -> tuple(id,bam) } )
+
+
+    /* 7 ─ Sort + index primary BAM */
+    sorted_bams = SAMTOOLS_SORT_INDEX(
+                     aligned_bams.map { id,bam -> tuple(id,bam) }
+                  )                            // (sample, sorted.bam, .bai)
+
+
+    /* 8 ─ UMI de-dup (optional) */
+    final_bams = params.skip_dedup \
+        ? sorted_bams \
+        : UMI_DEDUP( sorted_bams.map{ id,bam,bai -> tuple(id,bam) } )
+
+
+    /* 9 ─ Flagstat on final BAM */
+    FLAGSTAT( final_bams.map{ id,bam -> tuple(id,bam) } )
+
+
+    /* 10 ─ bigWig coverage */
+    bigwig_ch = BAMCOVERAGE( final_bams )       // (sample, *.bw)
+
+
+    /* 11 ─ Single-nt trace + pausing index */
+    bed_ch = BAM2BED( final_bams.map{ id,bam -> tuple(id,bam) } )
+
+    coords_ch = Channel
+                  .fromPath( params.tss_bed )
+                  .splitCsv(sep:'\t', header:true)
+                  .map { row -> tuple(row.name, row.tss as int, row.tes as int) }
+
+    metrics_ch = PROSEQ_METRICS( bed_ch.join(coords_ch) )
+
+
+    /* 12 ─ bigWig correlation */
+    BIGWIG_CORRELATION( bigwig_ch.collect(), file('refs/genes.bed') )
+
+
+    /* 13 ─ Final MultiQC (FastQC + pausing metrics) */
+def mqc_inputs = fastqc_zip_list              \
+                   .concat(                   \
+                     metrics_ch.map{ s,tsv,txt -> txt } \
+                   )
+MULTIQC( mqc_inputs.collect() )
+
 }

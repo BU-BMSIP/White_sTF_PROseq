@@ -1,0 +1,14 @@
+pausing_index	0.6688
+total_minus_strand_reads	20234
+total_all_reads	29752
+minus_strand_fraction	0.6801
+promoter_density	7.3168
+promoter_total	739
+gene_body_density	5.0427
+gene_body_total	2597
+pre_TES_density	3.1457
+pre_TES_total	475
+post_TES_density	2.4503
+post_TES_total	370
+downstream_density	5.7407
+downstream_total	2015
