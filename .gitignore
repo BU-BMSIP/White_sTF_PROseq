@@ -35,3 +35,6 @@ Thumbs.db
 
 # Spike-in intermediate files (these are large)
 spike_in_counts/
+sshkey*
+refs/
+bed/
