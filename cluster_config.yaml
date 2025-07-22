@@ -1,0 +1,4 @@
+__default__:
+  runtime: "4:00:00"
+  mem: "8G"
+  threads: 4

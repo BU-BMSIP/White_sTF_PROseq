@@ -38,3 +38,14 @@ spike_in_counts/
 sshkey*
 refs/
 bed/
+
+# Snakemake artifacts
+.snakemake/
+snakejob.*.sh
+snakejob.*.sh.e*
+snakejob.*.sh.o*
+logs/
+
+
+# Scratch work
+scratchwork/

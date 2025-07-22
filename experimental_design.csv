@@ -1,0 +1,16 @@
+sample,condition,replicate,sample_id
+KA_YH_656_1_S1_L001,condition_656,1,656_1
+KA_YH_656-2_S6_L001,condition_656,2,656_2
+KA_YH_656-3_S11_L001,condition_656,3,656_3
+KA_YH_917_1_S2_L001,condition_917,1,917_1
+KA_YH_917-2_S7_L001,condition_917,2,917_2
+KA_YH_917-3_S12_L001,condition_917,3,917_3
+KA_YH_964_1_S3_L001,condition_964,1,964_1
+KA_YH_964-2_S8_L001,condition_964,2,964_2
+KA_YH_964-3_S13_L001,condition_964,3,964_3
+KA_YH_965_1_S4_L001,condition_965,1,965_1
+KA_YH_965-2_S9_L001,condition_965,2,965_2
+KA_YH_965-3_S14_L001,condition_965,3,965_3
+KA_YH_GFP_1_S5_L001,GFP_control,1,GFP_1
+KA_YH_GFP-2_S10_L001,GFP_control,2,GFP_2
+KA_YH_GFP-3_S15_L001,GFP_control,3,GFP_3

@@ -1,0 +1,32 @@
+# Sample information (extracted from your file names)
+samples: 
+  - "KA_YH_656_1_S1_L001"
+  - "KA_YH_656-2_S6_L001" 
+  - "KA_YH_656-3_S11_L001"
+  - "KA_YH_917_1_S2_L001"
+  - "KA_YH_917-2_S7_L001"
+  - "KA_YH_917-3_S12_L001"
+  - "KA_YH_964_1_S3_L001"
+  - "KA_YH_964-2_S8_L001"
+  - "KA_YH_964-3_S13_L001"
+  - "KA_YH_965_1_S4_L001"
+  - "KA_YH_965-2_S9_L001"
+  - "KA_YH_965-3_S14_L001"
+  - "KA_YH_GFP_1_S5_L001"
+  - "KA_YH_GFP-2_S10_L001"
+  - "KA_YH_GFP-3_S15_L001"
+
+# Directory paths (based on your screenshots)
+project_dir: "/projectnb/khalil/nwhite42/ProSEQ_project"
+ref_dir: "/projectnb/khalil/nwhite42/ProSEQ_project/refs"
+
+# Reference files (I can see these in your refs folder)
+gtf_file: "/projectnb/khalil/nwhite42/ProSEQ_project/refs/gencode.v48.basic.annotation.gtf"
+genome_fasta: "/projectnb/khalil/nwhite42/ProSEQ_project/refs/GRCh38.primary_assembly.genome.fa"
+
+# Index locations (you may need to build these)
+salmon_index: "/projectnb/khalil/nwhite42/ProSEQ_project/refs/salmon_transcript_index"
+star_index: "/projectnb/khalil/nwhite42/ProSEQ_project/refs/star_index"
+
+# Experimental design for DESeq2
+experimental_design: "experimental_design.csv"
